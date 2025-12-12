@@ -5,13 +5,14 @@ import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.math.Vector2;
 
 public class Trap {
-    public Vector2 position;
-    float size;
-    Texture texture;
 
-    public Trap(Vector2 position, Texture texture, float size) {
-        this.position = position;
-        this.texture = texture;
+    public Vector2 position;
+    private Texture texture;
+    private float size;
+
+    public Trap(Vector2 pos, Texture tex, float size) {
+        this.position = pos;
+        this.texture = tex;
         this.size = size;
     }
 
