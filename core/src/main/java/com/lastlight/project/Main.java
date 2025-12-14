@@ -7,6 +7,8 @@ import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.graphics.g2d.BitmapFont;
+import com.badlogic.gdx.graphics.g2d.GlyphLayout;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.math.MathUtils;
@@ -22,6 +24,11 @@ public class Main extends ApplicationAdapter {
     private Texture wallTexture, floorTexture, trapTexture, droneTexture, playerTexture;
     private Texture generatorTexture, doorClosedTexture, doorOpenTexture;
     private Texture lightMask;
+
+    private Texture victoryTexture;
+    private boolean gameWon = false;
+    private float victoryTimer = 0f;
+
 
     private Player player;
     private ArrayList<Drone> drones = new ArrayList<>();
@@ -59,6 +66,7 @@ public class Main extends ApplicationAdapter {
 
     private int totalGenerators = 0;
     private boolean playerInteracting = false;
+    private OrthographicCamera hudCamera;
 
     @Override
     public void create() {
@@ -68,6 +76,12 @@ public class Main extends ApplicationAdapter {
         camera.position.set(camera.viewportWidth/2f, camera.viewportHeight/2f, 0);
         camera.zoom = 0.75f;
         camera.update();
+        font = new com.badlogic.gdx.graphics.g2d.BitmapFont();
+        font.getData().setScale(1f);        // optional: make text bigger
+        font.setColor(1f, 1f, 0f, 1f);      // yellow color
+        hudCamera = new OrthographicCamera(Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
+        hudCamera.setToOrtho(false); // Y-axis points down (top-left origin)
+        hudCamera.update();
 
         // Load textures
         wallTexture = new Texture("Wall.png");
@@ -78,6 +92,8 @@ public class Main extends ApplicationAdapter {
         generatorTexture = new Texture("Generator.png");
         doorClosedTexture = new Texture("DoorClosed.png");
         doorOpenTexture = new Texture("DoorOpen.png");
+        victoryTexture = new Texture("VictoryScreen.jpg"); // put your image in assets
+
 
         createLightMask();
 
@@ -96,6 +112,8 @@ public class Main extends ApplicationAdapter {
             }
         }
 
+        totalGenerators = generators.size(); // total number of generators
+
         doors.add(new Door(new Vector2(1*tileSize, (map.length-2)*tileSize), doorClosedTexture, doorOpenTexture, tileSize));
         doors.add(new Door(new Vector2(18*tileSize, 1*tileSize), doorClosedTexture, doorOpenTexture, tileSize));
     }
@@ -103,152 +121,185 @@ public class Main extends ApplicationAdapter {
     @Override
     public void render() {
         float delta = Gdx.graphics.getDeltaTime();
-        Gdx.gl.glClearColor(0,0,0,1);
-        Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
 
-        // Player update
-        player.update(delta, map, generators);
-
-        // Drone update
+        // ======================
+        // UPDATE LOGIC
+        // ======================
+        player.update(delta, map, generators, doors);
         for (Drone d : drones) d.update(delta, map);
 
-        // Camera follows player
-        camera.position.set(player.position.x + player.size/2f, player.position.y + player.size/2f, 0);
-        float halfWidth = camera.viewportWidth / 2f * camera.zoom;
-        float halfHeight = camera.viewportHeight / 2f * camera.zoom;
-        camera.position.x = MathUtils.clamp(camera.position.x, halfWidth, map[0].length*tileSize - halfWidth);
-        camera.position.y = MathUtils.clamp(camera.position.y, halfHeight, map.length*tileSize - halfHeight);
+        // ======================
+        // CAMERA
+        // ======================
+        camera.position.set(
+            player.position.x + player.size / 2f,
+            player.position.y + player.size / 2f,
+            0
+        );
+
+        float halfW = camera.viewportWidth * camera.zoom / 2f;
+        float halfH = camera.viewportHeight * camera.zoom / 2f;
+
+        camera.position.x = MathUtils.clamp(
+            camera.position.x,
+            halfW,
+            map[0].length * tileSize - halfW
+        );
+        camera.position.y = MathUtils.clamp(
+            camera.position.y,
+            halfH,
+            map.length * tileSize - halfH
+        );
+
         camera.update();
-
         batch.setProjectionMatrix(camera.combined);
-        batch.begin();
 
-        // Draw map
-        for (int y=0; y<map.length; y++) {
-            for (int x=0; x<map[y].length; x++) {
-                Vector2 pos = new Vector2(x*tileSize, (map.length - y -1)*tileSize);
-                String tile = map[y][x];
-                Texture tex = (tile.equals("W") ? wallTexture : floorTexture);
+        // ======================
+        // WORLD RENDER
+        // ======================
+        batch.begin();
+        for (int y = 0; y < map.length; y++) {
+            for (int x = 0; x < map[y].length; x++) {
+                Vector2 pos = new Vector2(
+                    x * tileSize,
+                    (map.length - y - 1) * tileSize
+                );
+                Texture tex = map[y][x].equals("W") ? wallTexture : floorTexture;
                 batch.draw(tex, pos.x, pos.y, tileSize, tileSize);
             }
         }
-
-        // Draw generators
         for (Generator g : generators) g.render(batch);
-
-        // Draw doors
         for (Door d : doors) d.render(batch);
-
-        // Draw drones
         for (Drone d : drones) d.render(batch);
-
-        // Draw player
         player.render(batch);
-
         batch.end();
 
-        // Draw darkness overlay
+        // Allow doors to be openable only if all generators completed
+        boolean allGeneratorsCompleted = getCompletedGenerators() == totalGenerators;
+        for (Door d : doors) {
+            if (allGeneratorsCompleted) d.setOpenable(true);
+        }
+
+        // Victory check
+        for (Door d : doors) {
+            if (d.isOpen() && playerIsOverlapping(player, d.position)) {
+                gameWon = true;
+            }
+        }
+
+        // ======================
+        // DARKNESS OVERLAY
+        // ======================
         batch.begin();
-        batch.setColor(0, 0, 0, 0.9f); 
-        batch.draw(floorTexture,
+        batch.setColor(0, 0, 0, 0.9f);
+        batch.draw(
+            floorTexture,
             camera.position.x - camera.viewportWidth,
             camera.position.y - camera.viewportHeight,
             camera.viewportWidth * 2,
-            camera.viewportHeight * 2);
-        batch.setColor(1,1,1,1);
+            camera.viewportHeight * 2
+        );
+        batch.setColor(1, 1, 1, 1);
         batch.end();
 
-        // Draw light mask centered on screen (camera center)
+        // ======================
+        // LIGHT MASK
+        // ======================
         batch.setBlendFunction(GL20.GL_ZERO, GL20.GL_ONE_MINUS_SRC_ALPHA);
         batch.begin();
-        float lightRadius = 300f;
-        batch.draw(lightMask,
+        batch.draw(
+            lightMask,
             camera.position.x - lightRadius,
             camera.position.y - lightRadius,
             lightRadius * 2,
-            lightRadius * 2);
+            lightRadius * 2
+        );
         batch.end();
         batch.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
 
-        // Interaction prompt for generators
+        // ======================
+        // UI RENDERING (WORLD-DEPENDENT, like generator prompts)
+        // ======================
+        Generator nearbyGen = null;
         for (Generator g : generators) {
             if (!g.isCompleted() && playerIsOverlapping(player, g.position)) {
-                batch.setProjectionMatrix(camera.combined);
-                batch.begin();
-
-                float boxWidth = 120;
-                float boxHeight = 30;
-                float boxX = g.position.x + tileSize/2f - boxWidth/2f;
-                float boxY = g.position.y + tileSize + 10; // slightly above the generator
-
-                // Draw semi-transparent box behind text
-                shapeRenderer.setProjectionMatrix(camera.combined);
-                shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
-                shapeRenderer.setColor(0f, 0f, 0f, 0.7f);
-                shapeRenderer.rect(boxX, boxY, boxWidth, boxHeight);
-                shapeRenderer.end();
-
-                // Draw text in yellow
-                if (font == null) font = new com.badlogic.gdx.graphics.g2d.BitmapFont();
-                font.getData().setScale(1f);
-                font.setColor(1f, 1f, 0f, 1f); // yellow color
-                font.draw(batch, "F: Fix Generator", boxX + 10, boxY + boxHeight - 8);
-
-                batch.end();
+                nearbyGen = g;
+                break;
             }
         }
 
+        if (nearbyGen != null) {
+            // Box behind text
+            shapeRenderer.setProjectionMatrix(camera.combined);
+            shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
+            float boxWidth = 150;
+            float boxHeight = 30;
+            float boxX = nearbyGen.position.x + tileSize / 2f - boxWidth / 2f;
+            float boxY = nearbyGen.position.y + tileSize + 10;
+            shapeRenderer.setColor(0f, 0f, 0f, 0.7f);
+            shapeRenderer.rect(boxX, boxY, boxWidth, boxHeight);
+            shapeRenderer.end();
 
-        // Generator interaction
-        playerInteracting = false;
+            // Text above generator
+            batch.setProjectionMatrix(camera.combined);
+            batch.begin();
+            font.draw(batch, "F  Fix Generator", boxX + 10, boxY + boxHeight - 8);
+            batch.end();
+        }
+
+        // Progress bar for interacting
         if (Gdx.input.isKeyPressed(Input.Keys.F)) {
             for (Generator g : generators) {
                 if (!g.isCompleted() && playerIsOverlapping(player, g.position)) {
-                    g.progress(delta);
-                    playerInteracting = true;
-                    if (g.isCompleted() && !g.isCounted()) {
-                        totalGenerators++;
-                        g.setCounted(true);
-                    }
+                    float barWidth = 200;
+                    float barHeight = 20;
+                    float barX = player.position.x + player.size / 2f - barWidth / 2f;
+                    float barY = player.position.y - 30;
+
+                    shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
+                    shapeRenderer.setColor(0.3f, 0.3f, 0.3f, 1);
+                    shapeRenderer.rect(barX, barY, barWidth, barHeight);
+
+                    shapeRenderer.setColor(0.2f, 1f, 0.2f, 1);
+                    shapeRenderer.rect(barX, barY, barWidth * (g.getProgress() / g.getMaxProgress()), barHeight);
+                    shapeRenderer.end();
                 }
             }
         }
 
-        // Open doors if all generators are done
-        if (totalGenerators >= 5) {
-            for (Door d : doors) {
-                d.startOpening(delta);
-                if (d.isOpen() && playerIsOverlapping(player, d.position)) {
-                    System.out.println("Player wins!");
-                }
+        // ====================================
+        // HUD RENDERING (fixed on screen)
+        // ====================================
+        batch.setProjectionMatrix(hudCamera.combined);
+        batch.begin();
+
+        // Completed generators out of total
+        int completed = getCompletedGenerators();
+        String hudText = "Generators: " + completed + "/" + totalGenerators;
+
+        GlyphLayout layout = new GlyphLayout(font, hudText);
+        float margin = 20f;
+        float x = Gdx.graphics.getWidth() - margin - layout.width; // align right
+        float y = Gdx.graphics.getHeight() - margin;               // align top
+        font.draw(batch, hudText, x, y);
+
+        batch.end();
+
+        // Victory timer
+        if (gameWon) {
+            victoryTimer += delta;
+            batch.setProjectionMatrix(hudCamera.combined);
+            batch.begin();
+            batch.draw(victoryTexture, 0, 0, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
+            batch.end();
+
+            if (victoryTimer >= 3f) {
+                Gdx.app.exit(); // end program
             }
-        }
-
-        // Draw progress bar at bottom middle if interacting
-        if (playerInteracting) {
-            shapeRenderer.setProjectionMatrix(camera.combined);
-            shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
-            float barWidth = 200;
-            float barHeight = 20;
-            float barX = player.position.x + player.size/2f - barWidth/2f;
-            float barY = player.position.y - 30;
-
-            // Draw background
-            shapeRenderer.setColor(0.3f,0.3f,0.3f,1f);
-            shapeRenderer.rect(barX, barY, barWidth, barHeight);
-
-            // Draw progress
-            for (Generator g : generators) {
-                if (playerIsOverlapping(player, g.position)) {
-                    shapeRenderer.setColor(0.2f,1f,0.2f,1f);
-                    float progressWidth = barWidth * (g.getProgress()/g.getMaxProgress());
-                    shapeRenderer.rect(barX, barY, progressWidth, barHeight);
-                }
-            }
-
-            shapeRenderer.end();
         }
     }
+
+
 
     private void createLightMask() {
         int size = 512; // bigger = smoother gradient
@@ -281,6 +332,35 @@ public class Main extends ApplicationAdapter {
     private boolean playerIsOverlapping(Player p, Vector2 objPos) {
         return p.position.x + p.size > objPos.x && p.position.x < objPos.x + tileSize &&
                p.position.y + p.size > objPos.y && p.position.y < objPos.y + tileSize;
+    }
+
+    private int getCompletedGenerators() {
+        int count = 0;
+        for (Generator g : generators) {
+            if (g.isCompleted()) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    private boolean isBlocked(Vector2 newPos) {
+        // Check walls
+        int gridX = (int)(newPos.x / tileSize);
+        int gridY = map.length - 1 - (int)(newPos.y / tileSize);
+        if (map[gridY][gridX].equals("W")) return true;
+
+        // Check doors
+        for (Door d : doors) {
+            if (d.isBlocking() &&
+                newPos.x + player.size > d.position.x &&
+                newPos.x < d.position.x + tileSize &&
+                newPos.y + player.size > d.position.y &&
+                newPos.y < d.position.y + tileSize) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Override

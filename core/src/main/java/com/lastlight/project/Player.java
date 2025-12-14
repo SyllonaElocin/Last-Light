@@ -18,6 +18,8 @@ public class Player {
     private float sprintSpeed = 150f;
 
     private Generator interacting = null;
+    private Door interactingDoor = null;
+
 
     private final float tileSize = 64f;
 
@@ -31,10 +33,13 @@ public class Player {
         this.texture = texture;
     }
 
-    public void update(float delta, String[][] map, List<Generator> generators) {
-        // Check interaction
-        if (Gdx.input.isKeyPressed(Input.Keys.F)) {
-            if (interacting == null) {
+    public void update(float delta, String[][] map, List<Generator> generators, List<Door> doors) {
+        boolean actionPressed = Gdx.input.isKeyPressed(Input.Keys.F);
+
+        // Interaction logic
+        if (actionPressed) {
+            // Start interacting with generator if not already
+            if (interacting == null && interactingDoor == null) {
                 for (Generator g : generators) {
                     if (!g.isCompleted() && isNear(g)) {
                         interacting = g;
@@ -42,29 +47,45 @@ public class Player {
                     }
                 }
             }
+
+            // Start interacting with door if not generator
+            if (interacting == null && interactingDoor == null) {
+                for (Door d : doors) {
+                    if (!d.isOpen() && d.isOpenable() && isNear(d)) {
+                        interactingDoor = d;
+                        break;
+                    }
+                }
+            }
+
+            // Progress interactions
             if (interacting != null) interacting.progress(delta);
+            if (interactingDoor != null) interactingDoor.startOpening(delta);
+
         } else {
             interacting = null;
+            interactingDoor = null;
         }
 
-        // Move if not interacting
-        if (interacting == null) {
+        // Movement only if not interacting
+        if (interacting == null && interactingDoor == null) {
             float currentSpeed = Gdx.input.isKeyPressed(Input.Keys.SHIFT_LEFT) ? sprintSpeed : walkSpeed;
             Vector2 movement = new Vector2();
             if (Gdx.input.isKeyPressed(Input.Keys.W)) movement.y += currentSpeed * delta;
             if (Gdx.input.isKeyPressed(Input.Keys.S)) movement.y -= currentSpeed * delta;
             if (Gdx.input.isKeyPressed(Input.Keys.A)) movement.x -= currentSpeed * delta;
             if (Gdx.input.isKeyPressed(Input.Keys.D)) movement.x += currentSpeed * delta;
-            move(movement, map, generators);
+            move(movement, map, generators, doors);
         }
     }
 
-    private void move(Vector2 delta, String[][] map, List<Generator> generators) {
-        if (!isColliding(position.x + delta.x, position.y, map, generators)) position.x += delta.x;
-        if (!isColliding(position.x, position.y + delta.y, map, generators)) position.y += delta.y;
+
+    private void move(Vector2 delta, String[][] map, List<Generator> generators, List<Door> doors) {
+        if (!isColliding(position.x + delta.x, position.y, map, generators, doors)) position.x += delta.x;
+        if (!isColliding(position.x, position.y + delta.y, map, generators, doors)) position.y += delta.y;
     }
 
-    private boolean isColliding(float x, float y, String[][] map, List<Generator> generators) {
+    private boolean isColliding(float x, float y, String[][] map, List<Generator> generators, List<Door> doors) {
         float cx = x + radius;
         float cy = y + radius;
 
@@ -86,11 +107,18 @@ public class Player {
                     if (cx + radius > g.position.x && cx - radius < g.position.x + g.size &&
                         cy + radius > g.position.y && cy - radius < g.position.y + g.size) return true;
                 }
+
+                // Check doors collision
+                for (Door d : doors) {
+                    if (!d.isOpen() && cx + radius > d.position.x && cx - radius < d.position.x + d.size &&
+                        cy + radius > d.position.y && cy - radius < d.position.y + d.size) return true;
+                }
             }
         }
 
         return false;
     }
+
 
     private boolean isNear(Generator g) {
         float centerX = position.x + size/2f;
@@ -99,6 +127,15 @@ public class Player {
         float genCenterY = g.position.y + g.size/2f;
         return Math.abs(centerX - genCenterX) < tileSize && Math.abs(centerY - genCenterY) < tileSize;
     }
+
+    private boolean isNear(Door d) {
+        float centerX = position.x + size/2f;
+        float centerY = position.y + size/2f;
+        float doorCenterX = d.position.x + d.size/2f;
+        float doorCenterY = d.position.y + d.size/2f;
+        return Math.abs(centerX - doorCenterX) < tileSize && Math.abs(centerY - doorCenterY) < tileSize;
+    }
+
 
     public Generator getInteractingGenerator() {
         return interacting;
