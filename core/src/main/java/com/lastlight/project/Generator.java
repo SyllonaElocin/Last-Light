@@ -3,6 +3,7 @@ package com.lastlight.project;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.math.Vector2;
+import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 
 public class Generator {
     public Vector2 position;
@@ -29,6 +30,27 @@ public class Generator {
             }
         }
     }
+
+    public void renderProgressBar(ShapeRenderer sr) {
+        if (completed) return;
+
+        float barWidth = size;
+        float barHeight = 6f;
+
+        float x = position.x;
+        float y = position.y + size + 6f; // above generator
+
+        float ratio = progress / maxProgress;
+
+        // Background
+        sr.setColor(0.15f, 0.15f, 0.15f, 1f);
+        sr.rect(x, y, barWidth, barHeight);
+
+        // Fill
+        sr.setColor(0.2f, 0.9f, 0.2f, 1f);
+        sr.rect(x, y, barWidth * ratio, barHeight);
+    }
+
 
     public boolean isCompleted() {
         return completed;

@@ -14,8 +14,8 @@ public class Player {
     public float size;
     private float radius;
 
-    private float walkSpeed = 100f;
-    private float sprintSpeed = 150f;
+    private float walkSpeed = 80f;
+    private float sprintSpeed = 120f;
 
     private Generator interacting = null;
     private Door interactingDoor = null;
@@ -103,7 +103,6 @@ public class Player {
 
                 // Check generator collision
                 for (Generator g : generators) {
-                    if (g.isCompleted()) continue;
                     if (cx + radius > g.position.x && cx - radius < g.position.x + g.size &&
                         cy + radius > g.position.y && cy - radius < g.position.y + g.size) return true;
                 }

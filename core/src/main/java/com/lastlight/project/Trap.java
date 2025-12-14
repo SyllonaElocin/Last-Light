@@ -8,7 +8,7 @@ public class Trap {
 
     public Vector2 position;
     private Texture texture;
-    private float size;
+    public float size;
 
     public Trap(Vector2 pos, Texture tex, float size) {
         this.position = pos;
