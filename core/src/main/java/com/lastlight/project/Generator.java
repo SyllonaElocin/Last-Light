@@ -36,21 +36,17 @@ public class Generator {
 
         float barWidth = size;
         float barHeight = 6f;
-
         float x = position.x;
-        float y = position.y + size + 6f; // above generator
+        float y = position.y + size + 6f;
 
         float ratio = progress / maxProgress;
 
-        // Background
         sr.setColor(0.15f, 0.15f, 0.15f, 1f);
         sr.rect(x, y, barWidth, barHeight);
 
-        // Fill
         sr.setColor(0.2f, 0.9f, 0.2f, 1f);
         sr.rect(x, y, barWidth * ratio, barHeight);
     }
-
 
     public boolean isCompleted() {
         return completed;
