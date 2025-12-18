@@ -27,7 +27,6 @@ public class Door {
         this.size = tileSize;
     }
 
-    // ===== SAME AS GENERATOR =====
     public void progress(float delta) {
         if (!openable || completed) return;
 
@@ -57,7 +56,6 @@ public class Door {
         sr.rect(x, y, barWidth * ratio, barHeight);
     }
 
-    // ===== STATE =====
     public boolean isOpen() {
         return completed;
     }
@@ -69,6 +67,14 @@ public class Door {
     public boolean isOpenable() {
         return openable;
     }
+
+    public void reset() {
+        progress = 0f;
+        completed = false;
+        currentTexture = closedTexture; 
+        openable = false;
+    }
+
 
     // ===== RENDER =====
     public void render(SpriteBatch batch) {

@@ -12,7 +12,7 @@ public class Trap {
     public Trap(Vector2 pos, Texture texture, float tileSize) {
         this.position = new Vector2(pos);
         this.texture = texture;
-        this.size = tileSize * 0.9f;
+        this.size = tileSize * 0.5f;
     }
 
     public boolean isPlayerOnTrap(Player player) {

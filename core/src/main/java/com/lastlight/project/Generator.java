@@ -72,6 +72,12 @@ public class Generator {
         batch.draw(texture, position.x, position.y, size, size);
     }
 
+    public void reset() {
+        progress = 0f;
+        completed = false;
+    }
+
+
     public void dispose() {
         // Texture handled in Main
     }
